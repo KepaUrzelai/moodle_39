@@ -90,6 +90,9 @@ $enrol = enrol_get_plugin('database');
 $result = 0;
 
 $result = $result | $enrol->sync_courses($trace);
+$result = $result | $enrol->sync_groups($trace);
 $result = $result | $enrol->sync_enrolments($trace);
+$result = $result | $enrol->sync_group_enrolments($trace);
+
 
 exit($result);
