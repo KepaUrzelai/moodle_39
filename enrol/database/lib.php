@@ -1088,6 +1088,7 @@ class enrol_database_plugin extends enrol_plugin {
 
         $table  = trim($this->get_config('groupenroltable'));
         $grouptable = trim($this->get_config('newgrouptable'));
+        $idnumber = trim($this->get_config('newgroupidnumber'));
         $userfield  = trim($this->get_config('userfield'));
         $groupfield  = trim($this->get_config('groupfield'));
 
@@ -1108,8 +1109,14 @@ class enrol_database_plugin extends enrol_plugin {
             // Adding users to their respective groups.
             foreach ($requestedgroups as $group) {
                 require_once($CFG->dirroot.'/group/lib.php');
-                $trace->output("  adding user with id ".$group['userid']." to group ".$group['groupid']);
-                groups_add_member($group['groupid'], $group['userid']);
+
+                if(groups_add_member($group['groupid'], $group['userid'])){
+                    $trace->output("  adding user with id: ".$group['userid']." to group: ".$group['groupid']);
+                } else {
+                    $errorcourse = $DB->get_record("groups",array("id"=>$group['groupid']),"courseid");
+                    $trace->output("  error adding user ".$group['userid']." to group ".$group['groupid'].",".
+                    " not enrolled in course ".$errorcourse->courseid);
+                }
             }
             unset($requestedgroups);
         }
@@ -1117,15 +1124,13 @@ class enrol_database_plugin extends enrol_plugin {
         $unenrolsql = "select mgm.groupid, mgm.userid
                          from {groups_members} mgm
                          join {groups} mg on (mgm.groupid = mg.id)
-                         join $grouptable g on (mg.idnumber = g.idnumber)
-                         where mgm.userid not in (
-                           select id
-                             from {user}
-                             where username = (
-                               select username
+                         join $grouptable g on (mg.idnumber = g.$idnumber)
+						 join {user} mu on (mu.id = mgm.userid)
+                         where mu.username not in (
+                           select  username
                                  from $table ge
                                  join {groups} mg on (ge.$groupfield = mg.idnumber)
-                                 join {groups_members} mgm on (mg.id = mgm.groupid)));";
+                                 join {groups_members} mgm on (mg.id = mgm.groupid));";
         if ($result = $DB->get_records_sql($unenrolsql)) {
             foreach ($result as $rs){
                 $group['userid'] = $rs->userid;
@@ -1170,7 +1175,7 @@ class enrol_database_plugin extends enrol_plugin {
 
         return $sql;
     }
-
+    
     /**
      * Tries to make connection to the external database.
      *
