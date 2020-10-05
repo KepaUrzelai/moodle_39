@@ -1093,18 +1093,19 @@ class enrol_database_plugin extends enrol_plugin {
         $groupfield  = trim($this->get_config('groupfield'));
 
         // postgres_fdw needed
-        $enrolsql = "select mu.id as userid, mg.id as groupid
+        $enrolsql = "select row_number() over() as index, mu.id as userid, mg.id as groupid
                        from $table ge, {user} mu, {groups} mg
                        where ge.$userfield = mu.username
                          and ge.$groupfield = mg.idnumber
-	                     and not exists (select 1 from {groups_members} mgm
-		                                    where mgm.groupid = mg.id
-		                                    and mgm.userid = mu.id);";
+                         and mu.deleted = 0
+                         and not exists (select 1 from {groups_members} mgm
+                                          where mgm.groupid = mg.id
+                                            and mgm.userid = mu.id);";
         if ($result = $DB->get_records_sql($enrolsql)) {
             foreach ($result as $rs){
                 $group['userid'] = $rs->userid;
                 $group['groupid'] = $rs->groupid;
-                $requestedgroups[] = $group;
+                $requestedgroups[$rs->index] = $group;
             }
             // Adding users to their respective groups.
             foreach ($requestedgroups as $group) {
@@ -1121,12 +1122,13 @@ class enrol_database_plugin extends enrol_plugin {
             unset($requestedgroups);
         }
 
-        $unenrolsql = "select mgm.groupid, mgm.userid
+        $unenrolsql = "select row_number() over() as index, mgm.groupid, mgm.userid
                          from {groups_members} mgm
                          join {groups} mg on (mgm.groupid = mg.id)
                          join $grouptable g on (mg.idnumber = g.$idnumber)
-						 join {user} mu on (mu.id = mgm.userid)
-                         where mu.username not in (
+                         join {user} mu on (mu.id = mgm.userid)
+                         where mu.deleted = 0
+                           and mu.username not in (
                            select  username
                                  from $table ge
                                  join {groups} mg on (ge.$groupfield = mg.idnumber)
@@ -1135,7 +1137,7 @@ class enrol_database_plugin extends enrol_plugin {
             foreach ($result as $rs){
                 $group['userid'] = $rs->userid;
                 $group['groupid'] = $rs->groupid;
-                $requestedunenrolments[] = $group;
+                $requestedunenrolments[$rs->index] = $group;
             }
             // Deletes the link between the specified user and group.
             foreach ($requestedunenrolments as $group) {
