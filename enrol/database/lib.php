@@ -1124,15 +1124,16 @@ class enrol_database_plugin extends enrol_plugin {
 
         $unenrolsql = "select row_number() over() as index, mgm.groupid, mgm.userid
                          from {groups_members} mgm
+                         join {user} mu on (mu.id = mgm.userid)
                          join {groups} mg on (mgm.groupid = mg.id)
                          join $grouptable g on (mg.idnumber = g.$idnumber)
-                         join {user} mu on (mu.id = mgm.userid)
                          where mu.deleted = 0
-                           and mu.username not in (
-                           select  username
-                                 from $table ge
-                                 join {groups} mg on (ge.$groupfield = mg.idnumber)
-                                 join {groups_members} mgm on (mg.id = mgm.groupid));";
+                           and (mu.username,mgm.groupid) not in (
+						       select ge2.username, mgm2.groupid
+                                 from $table ge2
+							     join {user} u2 on (ge2.username=u2.username)
+                                 join {groups} mg2 on (ge2.$groupfield = mg2.idnumber)
+                                 join {groups_members} mgm2 on (mg2.id = mgm2.groupid and u2.id=mgm2.userid));";
         if ($result = $DB->get_records_sql($unenrolsql)) {
             foreach ($result as $rs){
                 $group['userid'] = $rs->userid;
